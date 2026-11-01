@@ -16,6 +16,7 @@ export const SettingsView: React.FC = () => {
     settings,
     updateSettings,
     clearAllData,
+    clearCopiedMemory,
     showToast,
   } = useApp();
 
@@ -239,6 +240,23 @@ export const SettingsView: React.FC = () => {
               className="w-4 h-4 rounded text-blue-600 bg-slate-800 border-slate-700"
             />
           </label>
+
+          <label className="flex items-center justify-between p-3 rounded-xl bg-purple-950/20 border border-purple-500/30 cursor-pointer">
+            <div>
+              <div className="font-semibold text-purple-200">
+                Auto-Exclude Already Copied Numbers on Export / Copy
+              </div>
+              <div className="text-slate-400 text-[11px] mt-0.5">
+                Prevents already used leads from being re-copied or exported again when processing repeated files.
+              </div>
+            </div>
+            <input
+              type="checkbox"
+              checked={settings.autoExcludeCopiedOnExport}
+              onChange={(e) => updateSettings({ autoExcludeCopiedOnExport: e.target.checked })}
+              className="w-4 h-4 rounded text-purple-600 bg-slate-800 border-slate-700"
+            />
+          </label>
         </div>
       </div>
 
@@ -259,6 +277,14 @@ export const SettingsView: React.FC = () => {
             className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition-colors"
           >
             Clear Processing History
+          </button>
+
+          <button
+            type="button"
+            onClick={clearCopiedMemory}
+            className="px-3.5 py-2 rounded-xl bg-purple-950/60 hover:bg-purple-900/60 text-purple-200 text-xs font-semibold border border-purple-500/40 transition-colors"
+          >
+            Reset Copied Leads Memory
           </button>
 
           <button

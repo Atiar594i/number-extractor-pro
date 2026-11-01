@@ -7,6 +7,7 @@ import { ExtractorView } from './components/ExtractorView';
 import { NumberTableView } from './components/NumberTableView';
 import { CountryView } from './components/CountryView';
 import { DuplicateView } from './components/DuplicateView';
+import { CopiedMemoryView } from './components/CopiedMemoryView';
 import { ReviewView } from './components/ReviewView';
 import { HistoryView } from './components/HistoryView';
 import { SettingsView } from './components/SettingsView';
@@ -23,6 +24,7 @@ const MainContent: React.FC = () => {
         {activeTab === 'numbers' && <NumberTableView />}
         {activeTab === 'countries' && <CountryView />}
         {activeTab === 'duplicates' && <DuplicateView />}
+        {activeTab === 'copied' && <CopiedMemoryView />}
         {activeTab === 'review' && <ReviewView />}
         {activeTab === 'history' && <HistoryView />}
         {activeTab === 'settings' && <SettingsView />}

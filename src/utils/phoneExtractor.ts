@@ -5,6 +5,7 @@ import {
 } from 'libphonenumber-js';
 import type { ExtractedNumber, AppSettings, NumberValidationStatus, NumberType } from '../types';
 import { getCountryFlag, getCountryName, getCountryDialCode } from '../constants/countries';
+import { isNumberPreviouslyCopied, getCopiedRecord } from './copiedMemory';
 
 // Regex patterns to detect OTP, verification codes, and demo message noise
 const OTP_CONTEXT_REGEX = /(?:code|otp|pin|verification|verify|login|telegram|whatsapp|sms|passcode|token|key|secret|auth|password|contraseña|código|код|parol|codice)\s*[:=\-–—]?\s*(?:is\s*)?([0-9]{4,8})/gi;
@@ -228,6 +229,11 @@ export function parseCandidateNumber(
     duplicateCount = existing.duplicateCount;
   }
 
+  // Check persistent copied numbers memory
+  const copiedRecord = getCopiedRecord(normalized);
+  const isPreviouslyCopied = isNumberPreviouslyCopied(normalized);
+  const copiedAt = copiedRecord?.copiedAt;
+
   const extracted: ExtractedNumber = {
     id: `${context.fileName}_${context.rowIndex}_${normalized}_${Math.random().toString(36).slice(2, 7)}`,
     original: trimmed,
@@ -249,6 +255,8 @@ export function parseCandidateNumber(
     sourceColumn: context.columnName,
     isDuplicate,
     duplicateCount,
+    isPreviouslyCopied,
+    copiedAt,
     confidence,
     reviewReason,
   };

@@ -51,6 +51,7 @@ export function exportToCsv(numbers: ExtractedNumber[], filename: string): void 
     'Dial Code',
     'Status',
     'Type',
+    'Lead History',
     'Is Duplicate',
     'Source File',
     'Source Row',
@@ -63,6 +64,7 @@ export function exportToCsv(numbers: ExtractedNumber[], filename: string): void 
     `"${item.dialCode}"`,
     `"${item.status}"`,
     `"${item.numberType}"`,
+    `"${item.isPreviouslyCopied ? 'Already Copied' : 'Fresh Lead'}"`,
     `"${item.isDuplicate ? 'Yes' : 'No'}"`,
     `"${item.sourceFile}"`,
     `"${item.sourceRow}"`,
@@ -86,6 +88,7 @@ export function exportToExcel(numbers: ExtractedNumber[], filename: string): voi
       'Dial Code',
       'Validation Status',
       'Number Type',
+      'Lead History',
       'Is Duplicate',
       'Source File',
       'Source Row',
@@ -97,6 +100,7 @@ export function exportToExcel(numbers: ExtractedNumber[], filename: string): voi
       item.dialCode,
       item.status,
       item.numberType,
+      item.isPreviouslyCopied ? 'Already Copied' : 'Fresh Lead',
       item.isDuplicate ? 'Duplicate' : 'Unique',
       item.sourceFile,
       item.sourceRow,
@@ -107,7 +111,7 @@ export function exportToExcel(numbers: ExtractedNumber[], filename: string): voi
 
   // Guarantee every cell in the Phone Number column (Col 0) is typed as string ('s')
   // to prevent Excel from converting to scientific notation or removing leading zeros!
-  const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1:I1');
+  const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1:J1');
   for (let r = 1; r <= range.e.r; r++) {
     const cellAddress = XLSX.utils.encode_cell({ r, c: 0 });
     const cell = worksheet[cellAddress];
@@ -125,6 +129,7 @@ export function exportToExcel(numbers: ExtractedNumber[], filename: string): voi
     { wch: 12 }, // Dial
     { wch: 16 }, // Status
     { wch: 14 }, // Type
+    { wch: 16 }, // Lead History
     { wch: 14 }, // Duplicate
     { wch: 24 }, // Source File
     { wch: 12 }, // Row

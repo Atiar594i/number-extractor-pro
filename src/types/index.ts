@@ -23,6 +23,8 @@ export interface ExtractedNumber {
   sourceColumn?: string;
   isDuplicate: boolean;
   duplicateCount: number;
+  isPreviouslyCopied: boolean; // TRUE if this number was copied/used in any previous or current session
+  copiedAt?: number; // Timestamp when copied
   confidence: 'HIGH' | 'MEDIUM' | 'LOW';
   reviewReason?: string;
 }
@@ -35,6 +37,8 @@ export interface CountrySummary {
   totalCount: number;
   uniqueCount: number;
   duplicateCount: number;
+  previouslyCopiedCount: number;
+  freshCount: number;
   validCount: number;
   invalidCount: number;
   numbers: ExtractedNumber[];
@@ -49,6 +53,7 @@ export interface ProcessedFile {
   extractedCount: number;
   uniqueCount: number;
   duplicateCount: number;
+  previouslyCopiedCount: number;
   uploadedAt: number;
 }
 
@@ -57,6 +62,8 @@ export interface ExtractionStats {
   totalNumbers: number;
   uniqueNumbers: number;
   duplicateNumbers: number;
+  previouslyCopiedNumbers: number;
+  freshNumbers: number;
   invalidNumbers: number;
   reviewNumbers: number;
   countriesCount: number;
@@ -67,6 +74,8 @@ export interface AppSettings {
   theme: 'dark' | 'light';
   defaultExportFormat: 'txt' | 'csv' | 'xlsx';
   autoDeduplicate: boolean;
+  autoExcludeCopiedOnExport: boolean; // If true, copying/exporting automatically ignores already-copied numbers
+  hidePreviouslyCopied: boolean; // If true, hides previously copied numbers from the table
   numberFormat: 'e164' | 'international' | 'national' | 'digitsOnly';
   minPhoneLength: number;
   maxPhoneLength: number;
@@ -74,6 +83,14 @@ export interface AppSettings {
   includeCountryCodeOnCopy: boolean;
   enableReviewBucket: boolean;
   defaultFallbackCountry: string; // Default to 'OM' or ''
+}
+
+export interface CopiedRecord {
+  normalized: string;
+  countryName: string;
+  dialCode: string;
+  copiedAt: number;
+  sourceFile?: string;
 }
 
 export interface ProcessingSession {
@@ -93,6 +110,7 @@ export type ActiveTab =
   | 'numbers'
   | 'countries'
   | 'duplicates'
+  | 'copied'
   | 'review'
   | 'history'
   | 'settings';

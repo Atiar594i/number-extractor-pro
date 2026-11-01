@@ -8,10 +8,18 @@ import type {
   CountrySummary,
   ActiveTab,
   ProcessingSession,
+  CopiedRecord,
 } from '../types';
 import { parseFile, type ParseProgress } from '../utils/fileParser';
 import { saveSession } from '../utils/historyStorage';
 import { createSampleFlexSmsFile } from '../utils/sampleData';
+import {
+  initCopiedMemory,
+  persistCopiedNumbers,
+  clearAllCopiedMemory,
+  getAllCopiedRecords,
+  removeNumbersFromCopiedMemory,
+} from '../utils/copiedMemory';
 
 interface ToastState {
   id: string;
@@ -32,6 +40,8 @@ interface AppContextType {
   countrySummaries: CountrySummary[];
   duplicateNumbers: ExtractedNumber[];
   uniqueNumbers: ExtractedNumber[];
+  freshNumbers: ExtractedNumber[];
+  previouslyCopiedNumbers: ExtractedNumber[];
   reviewNumbers: ExtractedNumber[];
   isProcessing: boolean;
   progress: ParseProgress | null;
@@ -41,6 +51,10 @@ interface AppContextType {
   clearAllData: () => void;
   deleteNumbers: (ids: string[]) => void;
   loadSession: (session: ProcessingSession) => void;
+  markNumbersAsCopied: (numbersToMark: ExtractedNumber[]) => Promise<void>;
+  clearCopiedMemory: () => Promise<void>;
+  getAllCopiedMemory: () => Promise<CopiedRecord[]>;
+  removeNumbersFromMemory: (normalizedList: string[]) => Promise<void>;
   toast: ToastState | null;
   showToast: (message: string, type?: 'success' | 'info' | 'warning' | 'error') => void;
   dismissToast: () => void;
@@ -50,6 +64,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   theme: 'dark',
   defaultExportFormat: 'txt',
   autoDeduplicate: false,
+  autoExcludeCopiedOnExport: true,
+  hidePreviouslyCopied: false,
   numberFormat: 'e164',
   minPhoneLength: 7,
   maxPhoneLength: 16,
@@ -78,6 +94,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState<ParseProgress | null>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
+
+  // Initialize copied numbers memory from IndexedDB on startup
+  useEffect(() => {
+    initCopiedMemory();
+  }, []);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -110,6 +131,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setSettings((prev) => ({ ...prev, ...newSettings }));
   }, []);
 
+  // Filter lists
   const uniqueNumbers = useMemo(() => {
     return numbers.filter((n) => !n.isDuplicate && n.status !== 'REVIEW');
   }, [numbers]);
@@ -120,6 +142,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const reviewNumbers = useMemo(() => {
     return numbers.filter((n) => n.status === 'REVIEW');
+  }, [numbers]);
+
+  // Numbers that were copied in this or previous sessions
+  const previouslyCopiedNumbers = useMemo(() => {
+    return numbers.filter((n) => n.isPreviouslyCopied);
+  }, [numbers]);
+
+  // 100% Fresh Leads (Never copied before, unique, valid/possible)
+  const freshNumbers = useMemo(() => {
+    return numbers.filter((n) => !n.isPreviouslyCopied && !n.isDuplicate && n.status !== 'REVIEW');
   }, [numbers]);
 
   const countrySummaries = useMemo<CountrySummary[]>(() => {
@@ -138,6 +170,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           totalCount: 0,
           uniqueCount: 0,
           duplicateCount: 0,
+          previouslyCopiedCount: 0,
+          freshCount: 0,
           validCount: 0,
           invalidCount: 0,
           numbers: [],
@@ -152,6 +186,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         summary.duplicateCount += 1;
       } else {
         summary.uniqueCount += 1;
+      }
+
+      if (item.isPreviouslyCopied) {
+        summary.previouslyCopiedCount += 1;
+      } else if (!item.isDuplicate) {
+        summary.freshCount += 1;
       }
 
       if (item.isValid) {
@@ -169,6 +209,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const totalNumbers = numbers.length;
     const uniqueCount = uniqueNumbers.length;
     const duplicateCount = duplicateNumbers.length;
+    const previouslyCopiedCount = previouslyCopiedNumbers.length;
+    const freshCount = freshNumbers.length;
     const invalidCount = numbers.filter((n) => !n.isValid && n.status !== 'REVIEW').length;
     const reviewCount = reviewNumbers.length;
     const countriesCount = countrySummaries.length;
@@ -178,12 +220,62 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       totalNumbers,
       uniqueNumbers: uniqueCount,
       duplicateNumbers: duplicateCount,
+      previouslyCopiedNumbers: previouslyCopiedCount,
+      freshNumbers: freshCount,
       invalidNumbers: invalidCount,
       reviewNumbers: reviewCount,
       countriesCount,
       exportedCount: 0,
     };
-  }, [files, numbers, uniqueNumbers, duplicateNumbers, reviewNumbers, countrySummaries]);
+  }, [files, numbers, uniqueNumbers, duplicateNumbers, previouslyCopiedNumbers, freshNumbers, reviewNumbers, countrySummaries]);
+
+  // Mark numbers as copied and persist to storage
+  const markNumbersAsCopied = useCallback(async (numbersToMark: ExtractedNumber[]) => {
+    if (!numbersToMark || numbersToMark.length === 0) return;
+
+    await persistCopiedNumbers(numbersToMark);
+
+    const markSet = new Set(numbersToMark.map((n) => n.normalized));
+    const now = Date.now();
+
+    setNumbers((prev) =>
+      prev.map((item) => {
+        if (markSet.has(item.normalized) && !item.isPreviouslyCopied) {
+          return { ...item, isPreviouslyCopied: true, copiedAt: now };
+        }
+        return item;
+      })
+    );
+  }, []);
+
+  const clearCopiedMemory = useCallback(async () => {
+    await clearAllCopiedMemory();
+    setNumbers((prev) =>
+      prev.map((item) => ({ ...item, isPreviouslyCopied: false, copiedAt: undefined }))
+    );
+    showToast('Copied numbers memory cleared! All numbers are now marked as fresh.', 'success');
+  }, [showToast]);
+
+  const getAllCopiedMemory = useCallback(async () => {
+    return await getAllCopiedRecords();
+  }, []);
+
+  const removeNumbersFromMemory = useCallback(
+    async (normalizedList: string[]) => {
+      await removeNumbersFromCopiedMemory(normalizedList);
+      const rmSet = new Set(normalizedList);
+      setNumbers((prev) =>
+        prev.map((item) => {
+          if (rmSet.has(item.normalized)) {
+            return { ...item, isPreviouslyCopied: false, copiedAt: undefined };
+          }
+          return item;
+        })
+      );
+      showToast(`Removed ${normalizedList.length} numbers from copied memory`, 'info');
+    },
+    [showToast]
+  );
 
   const processFiles = useCallback(
     async (fileList: File[]) => {
@@ -218,6 +310,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           new Set(newExtractedNumbers.map((n) => n.countryName).filter(Boolean))
         );
         const uniqueInBatch = new Set(newExtractedNumbers.map((n) => n.normalized)).size;
+        const alreadyCopiedInBatch = newExtractedNumbers.filter((n) => n.isPreviouslyCopied).length;
 
         await saveSession({
           id: `session_${Date.now()}`,
@@ -236,10 +329,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           origin: { y: 0.6 },
         });
 
-        showToast(
-          `Successfully processed ${fileList.length} file(s)! Found ${newExtractedNumbers.length} numbers across ${sessionCountries.length} countries.`,
-          'success'
-        );
+        if (alreadyCopiedInBatch > 0) {
+          showToast(
+            `Processed ${fileList.length} file(s)! Found ${newExtractedNumbers.length} numbers. Notice: ${alreadyCopiedInBatch} number(s) were previously copied before!`,
+            'warning'
+          );
+        } else {
+          showToast(
+            `Successfully processed ${fileList.length} file(s)! Found ${newExtractedNumbers.length} numbers across ${sessionCountries.length} countries.`,
+            'success'
+          );
+        }
 
         setActiveTab('numbers');
       } catch (err: unknown) {
@@ -293,6 +393,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         extractedCount: session.totalNumbers,
         uniqueCount: session.uniqueNumbers,
         duplicateCount: session.duplicateNumbers,
+        previouslyCopiedCount: session.numbers?.filter((n) => n.isPreviouslyCopied).length || 0,
         uploadedAt: session.timestamp,
       }))
     );
@@ -315,6 +416,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         countrySummaries,
         duplicateNumbers,
         uniqueNumbers,
+        freshNumbers,
+        previouslyCopiedNumbers,
         reviewNumbers,
         isProcessing,
         progress,
@@ -324,6 +427,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         clearAllData,
         deleteNumbers,
         loadSession,
+        markNumbersAsCopied,
+        clearCopiedMemory,
+        getAllCopiedMemory,
+        removeNumbersFromMemory,
         toast,
         showToast,
         dismissToast,

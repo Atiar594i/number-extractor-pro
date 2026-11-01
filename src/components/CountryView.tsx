@@ -8,6 +8,9 @@ import {
   ArrowLeft,
   Check,
   Archive,
+  BookmarkCheck,
+  Sparkles,
+  Zap,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import {
@@ -25,6 +28,7 @@ export const CountryView: React.FC = () => {
     selectedCountryFilter,
     setSelectedCountryFilter,
     settings,
+    markNumbersAsCopied,
     showToast,
   } = useApp();
 
@@ -76,7 +80,7 @@ export const CountryView: React.FC = () => {
     }
   };
 
-  const handleExportSelectedCountriesCombinedTxt = () => {
+  const handleExportSelectedCountriesCombinedTxt = async () => {
     if (selectedCountryCodes.size === 0) {
       showToast('Please select at least one country to export', 'warning');
       return;
@@ -86,6 +90,7 @@ export const CountryView: React.FC = () => {
       .flatMap((c) => c.numbers);
 
     exportToTxt(combinedNumbers, `Selected_Countries_Numbers.txt`, settings.numberFormat);
+    await markNumbersAsCopied(combinedNumbers);
     showToast(`Exported ${combinedNumbers.length} numbers from ${selectedCountryCodes.size} countries as TXT`, 'success');
   };
 
@@ -100,6 +105,7 @@ export const CountryView: React.FC = () => {
 
     showToast('Generating country ZIP package...', 'info');
     await exportCountryWiseZip(combinedNumbers, 'Selected_Countries_Package.zip', settings.numberFormat);
+    await markNumbersAsCopied(combinedNumbers);
     showToast('Country package ZIP downloaded successfully', 'success');
   };
 
@@ -137,14 +143,28 @@ export const CountryView: React.FC = () => {
   const handleCopySingle = async (item: ExtractedNumber) => {
     const val = formatPhoneNumberBySetting(item, settings.numberFormat);
     await navigator.clipboard.writeText(val);
+    await markNumbersAsCopied([item]);
     setCopiedId(item.id);
     showToast(`Copied ${val} to clipboard`, 'success');
     setTimeout(() => setCopiedId(null), 2000);
   };
 
+  const handleCopyFreshInCountry = async () => {
+    if (!activeCountry) return;
+    const fresh = activeCountry.numbers.filter((n) => !n.isPreviouslyCopied);
+    if (fresh.length === 0) {
+      showToast(`All numbers in ${activeCountry.countryName} were already copied before!`, 'warning');
+      return;
+    }
+    await copyNumbersToClipboard(fresh, settings.numberFormat);
+    await markNumbersAsCopied(fresh);
+    showToast(`Copied ${fresh.length} fresh numbers for ${activeCountry.countryName} (1 per line)`, 'success');
+  };
+
   const handleCopyAllInCountry = async () => {
     if (!activeCountry || activeCountry.numbers.length === 0) return;
     await copyNumbersToClipboard(activeCountry.numbers, settings.numberFormat);
+    await markNumbersAsCopied(activeCountry.numbers);
     showToast(`Copied all ${activeCountry.numbers.length} numbers for ${activeCountry.countryName} (1 per line)`, 'success');
   };
 
@@ -156,6 +176,7 @@ export const CountryView: React.FC = () => {
       return;
     }
     await copyNumbersToClipboard(selected, settings.numberFormat);
+    await markNumbersAsCopied(selected);
     showToast(`Copied ${selected.length} selected numbers to clipboard`, 'success');
   };
 
@@ -186,7 +207,7 @@ export const CountryView: React.FC = () => {
         </div>
 
         {/* Country Header Card */}
-        <div className="p-6 rounded-2xl bg-gradient-to-r from-blue-950/60 to-slate-900 border border-blue-500/20 shadow-xl">
+        <div className="p-6 rounded-2xl bg-gradient-to-r from-blue-950/80 via-slate-900 to-indigo-950/60 border border-blue-500/20 shadow-xl">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-4">
               <span className="text-5xl">{activeCountry.flag}</span>
@@ -199,15 +220,22 @@ export const CountryView: React.FC = () => {
                     {activeCountry.dialCode}
                   </span>
                 </div>
-                <div className="flex items-center gap-4 text-xs text-slate-400 mt-1 font-mono">
+                <div className="flex flex-wrap items-center gap-4 text-xs text-slate-400 mt-1 font-mono">
                   <span>
                     Total: <strong className="text-white">{activeCountry.totalCount.toLocaleString()}</strong>
                   </span>
                   <span>•</span>
                   <span>
-                    Unique:{' '}
+                    Fresh (Uncopied):{' '}
                     <strong className="text-emerald-400">
-                      {activeCountry.uniqueCount.toLocaleString()}
+                      {activeCountry.freshCount.toLocaleString()}
+                    </strong>
+                  </span>
+                  <span>•</span>
+                  <span>
+                    Already Copied:{' '}
+                    <strong className="text-purple-300">
+                      {activeCountry.previouslyCopiedCount.toLocaleString()}
                     </strong>
                   </span>
                   <span>•</span>
@@ -223,6 +251,18 @@ export const CountryView: React.FC = () => {
 
             {/* Quick action buttons for this country */}
             <div className="flex flex-wrap items-center gap-2">
+              {activeCountry.freshCount > 0 && (
+                <button
+                  type="button"
+                  onClick={handleCopyFreshInCountry}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold shadow-md shadow-emerald-600/30 transition-all active:scale-95"
+                  title="Copy only numbers that have not been copied yet"
+                >
+                  <Zap className="w-3.5 h-3.5 fill-current" />
+                  <span>Copy Fresh Only ({activeCountry.freshCount})</span>
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={handleCopyAllInCountry}
@@ -317,6 +357,7 @@ export const CountryView: React.FC = () => {
                 </th>
                 <th className="p-3.5 w-14">#</th>
                 <th className="p-3.5">Phone Number</th>
+                <th className="p-3.5">Lead Status</th>
                 <th className="p-3.5">Type</th>
                 <th className="p-3.5">Status</th>
                 <th className="p-3.5">Duplicate</th>
@@ -333,7 +374,11 @@ export const CountryView: React.FC = () => {
                   <tr
                     key={item.id}
                     className={`hover:bg-slate-800/40 transition-colors ${
-                      isSelected ? 'bg-blue-950/20' : ''
+                      isSelected
+                        ? 'bg-blue-950/20'
+                        : item.isPreviouslyCopied
+                        ? 'bg-purple-950/10'
+                        : ''
                     }`}
                   >
                     <td className="p-3.5 text-center">
@@ -345,8 +390,21 @@ export const CountryView: React.FC = () => {
                       />
                     </td>
                     <td className="p-3.5 text-slate-500 text-[11px]">{idx + 1}</td>
-                    <td className="p-3.5 font-bold text-white tracking-wide">
-                      {formattedNum}
+                    <td className="p-3.5 font-bold tracking-wide">
+                      <span className={item.isPreviouslyCopied ? 'text-purple-300' : 'text-white'}>
+                        {formattedNum}
+                      </span>
+                    </td>
+                    <td className="p-3.5 font-sans text-[11px]">
+                      {item.isPreviouslyCopied ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/30 font-semibold">
+                          <BookmarkCheck className="w-3 h-3 text-purple-400" /> Already Copied
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-semibold">
+                          <Sparkles className="w-3 h-3 text-emerald-400" /> Fresh Lead
+                        </span>
+                      )}
                     </td>
                     <td className="p-3.5 font-sans text-[11px]">
                       <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-400">
@@ -381,6 +439,8 @@ export const CountryView: React.FC = () => {
                         className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
                           copiedId === item.id
                             ? 'bg-emerald-500 text-white'
+                            : item.isPreviouslyCopied
+                            ? 'bg-purple-900/40 text-purple-200 border border-purple-500/30 hover:bg-purple-800/50'
                             : 'bg-slate-800 hover:bg-slate-700 text-slate-200'
                         }`}
                       >
@@ -388,6 +448,11 @@ export const CountryView: React.FC = () => {
                           <>
                             <Check className="w-3 h-3" />
                             <span>Copied</span>
+                          </>
+                        ) : item.isPreviouslyCopied ? (
+                          <>
+                            <BookmarkCheck className="w-3 h-3 text-purple-400" />
+                            <span>Re-copy</span>
                           </>
                         ) : (
                           <>
@@ -419,7 +484,7 @@ export const CountryView: React.FC = () => {
             <Globe2 className="w-7 h-7 text-cyan-400" />
             <span>Country-Wise Organization</span>
           </h1>
-          <p className="text-sm text-slate-400 mt-1">
+          <p className="text-xs text-slate-400 mt-1">
             Phone numbers cleanly split by country. Select individual countries to view, or export multiple countries in a single ZIP package.
           </p>
         </div>
@@ -488,7 +553,7 @@ export const CountryView: React.FC = () => {
                 className={`p-5 rounded-2xl border transition-all duration-200 relative group ${
                   isSelected
                     ? 'border-blue-500/60 bg-blue-950/20 shadow-lg shadow-blue-500/10'
-                    : 'border-slate-800 bg-slate-900/60 hover:bg-slate-800/50 hover:border-slate-700'
+                    : 'border-slate-800/80 bg-slate-900/60 hover:bg-slate-800/50 hover:border-slate-700'
                 }`}
               >
                 {/* Checkbox for batch export */}
@@ -521,21 +586,21 @@ export const CountryView: React.FC = () => {
                   {/* Statistics */}
                   <div className="mt-4 grid grid-cols-3 gap-2 p-2.5 rounded-xl bg-slate-950/60 border border-slate-800/80 text-center font-mono">
                     <div>
-                      <div className="text-[11px] text-slate-400 font-sans">Total</div>
+                      <div className="text-[10px] text-slate-400 font-sans">Total</div>
                       <div className="text-sm font-bold text-white mt-0.5">
                         {country.totalCount.toLocaleString()}
                       </div>
                     </div>
                     <div>
-                      <div className="text-[11px] text-slate-400 font-sans">Unique</div>
+                      <div className="text-[10px] text-emerald-400 font-sans">Fresh</div>
                       <div className="text-sm font-bold text-emerald-400 mt-0.5">
-                        {country.uniqueCount.toLocaleString()}
+                        {country.freshCount.toLocaleString()}
                       </div>
                     </div>
                     <div>
-                      <div className="text-[11px] text-slate-400 font-sans">Duplicates</div>
-                      <div className="text-sm font-bold text-amber-400 mt-0.5">
-                        {country.duplicateCount.toLocaleString()}
+                      <div className="text-[10px] text-purple-400 font-sans">Copied</div>
+                      <div className="text-sm font-bold text-purple-300 mt-0.5">
+                        {country.previouslyCopiedCount.toLocaleString()}
                       </div>
                     </div>
                   </div>
@@ -551,12 +616,26 @@ export const CountryView: React.FC = () => {
                   </button>
 
                   <div className="flex items-center gap-1.5">
+                    {country.freshCount > 0 && (
+                      <button
+                        onClick={async () => {
+                          const fresh = country.numbers.filter((n) => !n.isPreviouslyCopied);
+                          await copyNumbersToClipboard(fresh, settings.numberFormat);
+                          await markNumbersAsCopied(fresh);
+                          showToast(`Copied ${fresh.length} fresh numbers for ${country.countryName}`, 'success');
+                        }}
+                        className="p-1.5 rounded-lg bg-emerald-950/60 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-900/60 transition-colors"
+                        title="Copy Fresh Only"
+                      >
+                        <Zap className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                     <button
-                      onClick={() =>
-                        copyNumbersToClipboard(country.numbers, settings.numberFormat).then(() =>
-                          showToast(`Copied ${country.numbers.length} numbers for ${country.countryName}`, 'success')
-                        )
-                      }
+                      onClick={async () => {
+                        await copyNumbersToClipboard(country.numbers, settings.numberFormat);
+                        await markNumbersAsCopied(country.numbers);
+                        showToast(`Copied ${country.numbers.length} numbers for ${country.countryName}`, 'success');
+                      }}
                       className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
                       title="Copy all numbers"
                     >

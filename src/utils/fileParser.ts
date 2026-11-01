@@ -150,6 +150,7 @@ async function parseExcelFile(
 
   const uniqueCount = new Set(extractedNumbers.map((n) => n.normalized)).size;
   const duplicateCount = extractedNumbers.length - uniqueCount;
+  const previouslyCopiedCount = extractedNumbers.filter((n) => n.isPreviouslyCopied).length;
 
   return {
     fileInfo: {
@@ -161,6 +162,7 @@ async function parseExcelFile(
       extractedCount: extractedNumbers.length,
       uniqueCount,
       duplicateCount,
+      previouslyCopiedCount,
       uploadedAt: Date.now(),
     },
     numbers: extractedNumbers,
@@ -234,6 +236,7 @@ async function parseCsvFile(
 
   const uniqueCount = new Set(extractedNumbers.map((n) => n.normalized)).size;
   const duplicateCount = extractedNumbers.length - uniqueCount;
+  const previouslyCopiedCount = extractedNumbers.filter((n) => n.isPreviouslyCopied).length;
 
   return {
     fileInfo: {
@@ -245,6 +248,7 @@ async function parseCsvFile(
       extractedCount: extractedNumbers.length,
       uniqueCount,
       duplicateCount,
+      previouslyCopiedCount,
       uploadedAt: Date.now(),
     },
     numbers: extractedNumbers,
@@ -305,6 +309,7 @@ async function parseTxtFile(
 
   const uniqueCount = new Set(extractedNumbers.map((n) => n.normalized)).size;
   const duplicateCount = extractedNumbers.length - uniqueCount;
+  const previouslyCopiedCount = extractedNumbers.filter((n) => n.isPreviouslyCopied).length;
 
   return {
     fileInfo: {
@@ -316,6 +321,7 @@ async function parseTxtFile(
       extractedCount: extractedNumbers.length,
       uniqueCount,
       duplicateCount,
+      previouslyCopiedCount,
       uploadedAt: Date.now(),
     },
     numbers: extractedNumbers,

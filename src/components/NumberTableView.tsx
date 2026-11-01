@@ -11,6 +11,12 @@ import {
   ChevronLeft,
   ChevronRight,
   Check,
+  BookmarkCheck,
+  Sparkles,
+  Zap,
+  Filter,
+  EyeOff,
+  Eye,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import {
@@ -31,12 +37,15 @@ export const NumberTableView: React.FC = () => {
     selectedCountryFilter,
     setSelectedCountryFilter,
     deleteNumbers,
+    markNumbersAsCopied,
     showToast,
   } = useApp();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'VALID' | 'POSSIBLE' | 'INVALID'>('ALL');
   const [duplicateFilter, setDuplicateFilter] = useState<'ALL' | 'UNIQUE' | 'DUPLICATES'>('ALL');
+  const [leadFilter, setLeadFilter] = useState<'ALL' | 'FRESH_ONLY' | 'COPIED_ONLY'>('ALL');
+  const [hideCopiedToggle, setHideCopiedToggle] = useState<boolean>(settings.hidePreviouslyCopied);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
@@ -45,7 +54,20 @@ export const NumberTableView: React.FC = () => {
   // Filtered dataset
   const filteredNumbers = useMemo(() => {
     return numbers.filter((item) => {
-      // 1. Search query
+      // 0. Hide previously copied if toggle is on
+      if (hideCopiedToggle && item.isPreviouslyCopied) {
+        return false;
+      }
+
+      // 1. Lead filter (Fresh vs Already Copied)
+      if (leadFilter === 'FRESH_ONLY' && item.isPreviouslyCopied) {
+        return false;
+      }
+      if (leadFilter === 'COPIED_ONLY' && !item.isPreviouslyCopied) {
+        return false;
+      }
+
+      // 2. Search query
       if (searchQuery) {
         const q = searchQuery.toLowerCase().trim();
         const matchNumber = item.normalized.toLowerCase().includes(q) || item.digitsOnly.includes(q);
@@ -57,21 +79,21 @@ export const NumberTableView: React.FC = () => {
         }
       }
 
-      // 2. Country filter
+      // 3. Country filter
       if (selectedCountryFilter && selectedCountryFilter !== 'ALL') {
         if (item.countryCode !== selectedCountryFilter) {
           return false;
         }
       }
 
-      // 3. Status filter
+      // 4. Status filter
       if (statusFilter !== 'ALL') {
         if (item.status !== statusFilter) {
           return false;
         }
       }
 
-      // 4. Duplicate filter
+      // 5. Duplicate filter
       if (duplicateFilter === 'UNIQUE') {
         if (item.isDuplicate) return false;
       } else if (duplicateFilter === 'DUPLICATES') {
@@ -80,7 +102,17 @@ export const NumberTableView: React.FC = () => {
 
       return true;
     });
-  }, [numbers, searchQuery, selectedCountryFilter, statusFilter, duplicateFilter]);
+  }, [numbers, searchQuery, selectedCountryFilter, statusFilter, duplicateFilter, leadFilter, hideCopiedToggle]);
+
+  // Counts for quick tabs
+  const freshCount = useMemo(
+    () => numbers.filter((n) => !n.isPreviouslyCopied && !n.isDuplicate && n.status !== 'REVIEW').length,
+    [numbers]
+  );
+  const alreadyCopiedCount = useMemo(
+    () => numbers.filter((n) => n.isPreviouslyCopied).length,
+    [numbers]
+  );
 
   // Pagination calculation
   const totalItems = filteredNumbers.length;
@@ -134,20 +166,49 @@ export const NumberTableView: React.FC = () => {
   const handleCopySingle = async (item: ExtractedNumber) => {
     const val = formatPhoneNumberBySetting(item, settings.numberFormat);
     await navigator.clipboard.writeText(val);
+    await markNumbersAsCopied([item]);
     setCopiedId(item.id);
-    showToast(`Copied ${val} to clipboard`, 'success');
+    showToast(`Copied ${val} (Saved to Copied Memory)`, 'success');
     setTimeout(() => setCopiedId(null), 2000);
   };
 
   // Copy selected numbers
   const handleCopySelected = async () => {
-    const selectedList = numbers.filter((n) => selectedIds.has(n.id));
+    let selectedList = numbers.filter((n) => selectedIds.has(n.id));
     if (selectedList.length === 0) {
       showToast('No numbers selected to copy', 'warning');
       return;
     }
+
+    // Auto exclude already copied if enabled
+    if (settings.autoExcludeCopiedOnExport) {
+      const freshOnly = selectedList.filter((n) => !n.isPreviouslyCopied);
+      if (freshOnly.length < selectedList.length) {
+        const skipped = selectedList.length - freshOnly.length;
+        if (freshOnly.length === 0) {
+          showToast(`All ${skipped} selected numbers were ALREADY copied before! Nothing new to copy.`, 'warning');
+          return;
+        }
+        showToast(`Skipped ${skipped} already-copied number(s). Copying ${freshOnly.length} fresh leads...`, 'info');
+        selectedList = freshOnly;
+      }
+    }
+
     await copyNumbersToClipboard(selectedList, settings.numberFormat);
-    showToast(`Copied ${selectedList.length} number(s) to clipboard (1 per line)`, 'success');
+    await markNumbersAsCopied(selectedList);
+    showToast(`Copied ${selectedList.length} numbers (1 per line). Saved to Memory!`, 'success');
+  };
+
+  // Copy all fresh numbers
+  const handleCopyAllFreshOnly = async () => {
+    const freshList = filteredNumbers.filter((n) => !n.isPreviouslyCopied);
+    if (freshList.length === 0) {
+      showToast('No fresh uncopied numbers available in active filter!', 'warning');
+      return;
+    }
+    await copyNumbersToClipboard(freshList, settings.numberFormat);
+    await markNumbersAsCopied(freshList);
+    showToast(`Copied ${freshList.length} fresh uncopied numbers (1 per line)!`, 'success');
   };
 
   // Copy all filtered numbers
@@ -156,23 +217,42 @@ export const NumberTableView: React.FC = () => {
       showToast('No numbers available to copy', 'warning');
       return;
     }
-    await copyNumbersToClipboard(filteredNumbers, settings.numberFormat);
-    showToast(`Copied ${filteredNumbers.length} number(s) to clipboard (1 per line)`, 'success');
+
+    let targetList = filteredNumbers;
+    if (settings.autoExcludeCopiedOnExport) {
+      const freshOnly = filteredNumbers.filter((n) => !n.isPreviouslyCopied);
+      const skipped = filteredNumbers.length - freshOnly.length;
+      if (skipped > 0) {
+        if (freshOnly.length === 0) {
+          showToast(`All ${skipped} filtered numbers were ALREADY copied before!`, 'warning');
+          return;
+        }
+        showToast(`Excluded ${skipped} already-copied numbers. Copying ${freshOnly.length} fresh leads...`, 'info');
+        targetList = freshOnly;
+      }
+    }
+
+    await copyNumbersToClipboard(targetList, settings.numberFormat);
+    await markNumbersAsCopied(targetList);
+    showToast(`Copied ${targetList.length} numbers to clipboard (1 per line)`, 'success');
   };
 
   // Export handlers
-  const handleExportTxt = (targetList: ExtractedNumber[], label: string) => {
+  const handleExportTxt = async (targetList: ExtractedNumber[], label: string) => {
     exportToTxt(targetList, `${label}_Numbers.txt`, settings.numberFormat);
-    showToast(`Exported ${targetList.length} numbers as TXT`, 'success');
+    await markNumbersAsCopied(targetList);
+    showToast(`Exported ${targetList.length} numbers as TXT and saved to memory`, 'success');
   };
 
-  const handleExportCsv = (targetList: ExtractedNumber[], label: string) => {
+  const handleExportCsv = async (targetList: ExtractedNumber[], label: string) => {
     exportToCsv(targetList, `${label}_Numbers.csv`);
+    await markNumbersAsCopied(targetList);
     showToast(`Exported ${targetList.length} numbers as CSV`, 'success');
   };
 
-  const handleExportExcel = (targetList: ExtractedNumber[], label: string) => {
+  const handleExportExcel = async (targetList: ExtractedNumber[], label: string) => {
     exportToExcel(targetList, `${label}_Numbers.xlsx`);
+    await markNumbersAsCopied(targetList);
     showToast(`Exported ${targetList.length} numbers as Excel (.xlsx)`, 'success');
   };
 
@@ -185,33 +265,46 @@ export const NumberTableView: React.FC = () => {
         <div>
           <h1 className="text-2xl font-extrabold text-white tracking-tight flex items-center gap-2.5">
             <span>Extracted Phone Numbers</span>
-            <span className="text-sm font-semibold px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30">
-              {filteredNumbers.length.toLocaleString()} total
+            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30 font-mono">
+              {filteredNumbers.length.toLocaleString()} visible
             </span>
           </h1>
-          <p className="text-sm text-slate-400 mt-1">
-            Displaying real phone numbers extracted with verified country dial codes.
+          <p className="text-xs text-slate-400 mt-1">
+            Displaying numbers with verified country dial codes. Already-copied leads are protected from being duplicated.
           </p>
         </div>
 
         {/* Global Export & Copy Buttons */}
         <div className="flex flex-wrap items-center gap-2">
+          {freshCount > 0 && (
+            <button
+              type="button"
+              onClick={handleCopyAllFreshOnly}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold shadow-lg shadow-emerald-600/30 transition-all active:scale-95"
+              title="Copy only fresh leads that have never been copied before"
+            >
+              <Zap className="w-3.5 h-3.5 fill-current" />
+              <span>Copy Fresh Only ({freshCount})</span>
+            </button>
+          )}
+
           <button
             type="button"
             onClick={handleCopyAllFiltered}
             disabled={filteredNumbers.length === 0}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold transition-colors disabled:opacity-50"
-            title="Copy all currently filtered numbers (1 per line)"
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold transition-colors disabled:opacity-50"
+            title="Copy all currently filtered numbers"
           >
             <Copy className="w-3.5 h-3.5 text-blue-400" />
-            <span>Copy All ({filteredNumbers.length})</span>
+            <span>Copy Filtered ({filteredNumbers.length})</span>
           </button>
 
           <button
             type="button"
             onClick={() => handleExportTxt(filteredNumbers, 'Extracted')}
             disabled={filteredNumbers.length === 0}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold transition-colors disabled:opacity-50"
+            className="inline-flex items-center gap-1 px-2.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold transition-colors disabled:opacity-50"
+            title="Download clean TXT"
           >
             <FileText className="w-3.5 h-3.5 text-emerald-400" />
             <span>TXT</span>
@@ -221,7 +314,7 @@ export const NumberTableView: React.FC = () => {
             type="button"
             onClick={() => handleExportCsv(filteredNumbers, 'Extracted')}
             disabled={filteredNumbers.length === 0}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold transition-colors disabled:opacity-50"
+            className="inline-flex items-center gap-1 px-2.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold transition-colors disabled:opacity-50"
           >
             <FileSpreadsheet className="w-3.5 h-3.5 text-cyan-400" />
             <span>CSV</span>
@@ -231,7 +324,7 @@ export const NumberTableView: React.FC = () => {
             type="button"
             onClick={() => handleExportExcel(filteredNumbers, 'Extracted')}
             disabled={filteredNumbers.length === 0}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-md shadow-blue-600/30 transition-all disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-md shadow-blue-600/30 transition-all disabled:opacity-50"
           >
             <Download className="w-3.5 h-3.5" />
             <span>Excel (.xlsx)</span>
@@ -239,8 +332,83 @@ export const NumberTableView: React.FC = () => {
         </div>
       </div>
 
+      {/* Quick Lead Filter Pills Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-2xl bg-slate-900/80 border border-slate-800 text-xs">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-slate-400 font-medium mr-1 flex items-center gap-1">
+            <Filter className="w-3.5 h-3.5 text-blue-400" />
+            Filter Leads:
+          </span>
+
+          <button
+            type="button"
+            onClick={() => {
+              setLeadFilter('ALL');
+              setCurrentPage(1);
+            }}
+            className={`px-3 py-1.5 rounded-xl font-semibold transition-all ${
+              leadFilter === 'ALL'
+                ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
+                : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
+            }`}
+          >
+            All Numbers ({numbers.length})
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setLeadFilter('FRESH_ONLY');
+              setCurrentPage(1);
+            }}
+            className={`px-3 py-1.5 rounded-xl font-semibold transition-all flex items-center gap-1.5 ${
+              leadFilter === 'FRESH_ONLY'
+                ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30 ring-1 ring-emerald-400'
+                : 'bg-slate-950 text-emerald-400 hover:text-emerald-300 border border-emerald-500/30'
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5 text-emerald-300" />
+            <span>Fresh Leads ({freshCount})</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setLeadFilter('COPIED_ONLY');
+              setCurrentPage(1);
+            }}
+            className={`px-3 py-1.5 rounded-xl font-semibold transition-all flex items-center gap-1.5 ${
+              leadFilter === 'COPIED_ONLY'
+                ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30 ring-1 ring-purple-400'
+                : 'bg-slate-950 text-purple-300 hover:text-purple-200 border border-purple-500/30'
+            }`}
+          >
+            <BookmarkCheck className="w-3.5 h-3.5 text-purple-400" />
+            <span>Already Copied ({alreadyCopiedCount})</span>
+          </button>
+        </div>
+
+        {/* Toggle to completely hide copied */}
+        <label className="flex items-center gap-2 cursor-pointer select-none text-[11px] text-slate-300 font-medium px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 hover:border-slate-700">
+          <input
+            type="checkbox"
+            checked={hideCopiedToggle}
+            onChange={(e) => {
+              setHideCopiedToggle(e.target.checked);
+              updateSettings({ hidePreviouslyCopied: e.target.checked });
+              setCurrentPage(1);
+            }}
+            className="w-3.5 h-3.5 rounded text-purple-600 bg-slate-800 border-slate-700"
+          />
+          <span className="flex items-center gap-1">
+            {hideCopiedToggle ? <EyeOff className="w-3.5 h-3.5 text-purple-400" /> : <Eye className="w-3.5 h-3.5 text-slate-400" />}
+            Hide Already Copied Numbers
+          </span>
+        </label>
+      </div>
+
       {/* Filter and Search Bar */}
-      <div className="p-4 rounded-2xl bg-slate-900/70 border border-slate-800 space-y-3">
+      <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800/80 space-y-3">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
           {/* Search box */}
           <div className="relative sm:col-span-2">
@@ -270,7 +438,7 @@ export const NumberTableView: React.FC = () => {
               <option value="ALL">All Countries ({countrySummaries.length})</option>
               {countrySummaries.map((c) => (
                 <option key={c.countryCode} value={c.countryCode}>
-                  {c.flag} {c.countryName} ({c.dialCode}) — {c.totalCount}
+                  {c.flag} {c.countryName} ({c.dialCode}) — {c.totalCount} ({c.freshCount} fresh)
                 </option>
               ))}
             </select>
@@ -470,8 +638,9 @@ export const NumberTableView: React.FC = () => {
               <th className="p-3.5">Country</th>
               <th className="p-3.5">Dial Code</th>
               <th className="p-3.5">Phone Number</th>
+              <th className="p-3.5">Lead Status</th>
               <th className="p-3.5">Type</th>
-              <th className="p-3.5">Status</th>
+              <th className="p-3.5">Validation</th>
               <th className="p-3.5">Duplicate</th>
               <th className="p-3.5">Source</th>
               <th className="p-3.5 text-right w-24">Action</th>
@@ -480,7 +649,7 @@ export const NumberTableView: React.FC = () => {
           <tbody className="divide-y divide-slate-800/60 text-slate-300 font-mono">
             {paginatedNumbers.length === 0 ? (
               <tr>
-                <td colSpan={10} className="p-8 text-center text-slate-500 font-sans text-sm">
+                <td colSpan={11} className="p-8 text-center text-slate-500 font-sans text-sm">
                   {numbers.length === 0
                     ? 'No phone numbers extracted yet. Upload a spreadsheet or load sample data.'
                     : 'No numbers match your active search or filters.'}
@@ -496,7 +665,11 @@ export const NumberTableView: React.FC = () => {
                   <tr
                     key={item.id}
                     className={`hover:bg-slate-800/40 transition-colors ${
-                      isSelected ? 'bg-blue-950/20' : ''
+                      isSelected
+                        ? 'bg-blue-950/20'
+                        : item.isPreviouslyCopied
+                        ? 'bg-purple-950/5'
+                        : ''
                     }`}
                   >
                     <td className="p-3.5 text-center">
@@ -515,9 +688,32 @@ export const NumberTableView: React.FC = () => {
                       </div>
                     </td>
                     <td className="p-3.5 text-slate-400 font-mono">{item.dialCode || '—'}</td>
-                    <td className="p-3.5 font-bold text-white tracking-wide">
-                      {formattedNum}
+                    <td className="p-3.5 font-bold tracking-wide">
+                      <span className={item.isPreviouslyCopied ? 'text-purple-300' : 'text-white'}>
+                        {formattedNum}
+                      </span>
                     </td>
+
+                    {/* LEAD STATUS COLUMN: Fresh Lead vs Already Copied */}
+                    <td className="p-3.5 font-sans text-[11px]">
+                      {item.isPreviouslyCopied ? (
+                        <span
+                          className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/30 font-semibold cursor-help"
+                          title={
+                            item.copiedAt
+                              ? `Copied on ${new Date(item.copiedAt).toLocaleDateString()}`
+                              : 'Already copied in a previous session'
+                          }
+                        >
+                          <BookmarkCheck className="w-3 h-3 text-purple-400" /> Already Copied
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-semibold">
+                          <Sparkles className="w-3 h-3 text-emerald-400" /> Fresh Lead
+                        </span>
+                      )}
+                    </td>
+
                     <td className="p-3.5 font-sans text-[11px]">
                       <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-400">
                         {item.numberType}
@@ -557,14 +753,21 @@ export const NumberTableView: React.FC = () => {
                         className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
                           copiedId === item.id
                             ? 'bg-emerald-500 text-white'
+                            : item.isPreviouslyCopied
+                            ? 'bg-purple-900/40 text-purple-200 border border-purple-500/30 hover:bg-purple-800/50'
                             : 'bg-slate-800 hover:bg-slate-700 text-slate-200'
                         }`}
-                        title="Copy this phone number to clipboard"
+                        title={item.isPreviouslyCopied ? 'Already copied before. Click to copy again.' : 'Copy phone number'}
                       >
                         {copiedId === item.id ? (
                           <>
                             <Check className="w-3 h-3" />
                             <span>Copied</span>
+                          </>
+                        ) : item.isPreviouslyCopied ? (
+                          <>
+                            <BookmarkCheck className="w-3 h-3 text-purple-400" />
+                            <span>Re-copy</span>
                           </>
                         ) : (
                           <>
