@@ -108,6 +108,19 @@ export const DuplicateView: React.FC = () => {
         </div>
       </div>
 
+      {/* Info Banner on Deduplication Logic */}
+      <div className="p-4 rounded-2xl bg-blue-950/40 border border-blue-500/30 flex items-start gap-3">
+        <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+        <div className="text-xs text-slate-300 space-y-1">
+          <div className="font-bold text-white text-sm">
+            Auto-Deduplication Shield Active (১টি করে দেখাও — বাদবাকি ডুপ্লিকেট বাদ)
+          </div>
+          <p className="text-slate-400">
+            যখন কোনো একটি নাম্বার বারবার আসে, আমাদের সিস্টেম মূল টেবিলে এবং কান্ট্রি লিস্টে শুধুমাত্র প্রথম ১টি অরিজিনাল কপি রাখে এবং বাদবাকি সকল অতিরিক্ত ডুপ্লিকেট স্বয়ংক্রিয়ভাবে বাদ দিয়ে দেয়। কপি বা এক্সপোর্ট করলেও শুধুমাত্র ১ কপিই বের হবে। নিচে বাদ দেওয়া ডুপ্লিকেট তালিকা দেওয়া হলো:
+          </p>
+        </div>
+      </div>
+
       {/* Duplicate Metrics Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 font-mono">
         <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800">

@@ -316,7 +316,7 @@ export const ExtractorView: React.FC = () => {
           {/* Auto Deduplication */}
           <div className="p-3.5 rounded-xl border border-slate-800 bg-slate-950/40 space-y-2">
             <div className="flex items-center justify-between">
-              <span className="font-semibold text-slate-200">Auto Deduplicate</span>
+              <span className="font-semibold text-slate-200">Auto Deduplicate (Keep 1 Copy Only)</span>
               <input
                 type="checkbox"
                 checked={settings.autoDeduplicate}
@@ -325,7 +325,7 @@ export const ExtractorView: React.FC = () => {
               />
             </div>
             <p className="text-slate-400 text-[11px]">
-              Automatically filter out duplicate occurrences across sheets and files during processing.
+              Automatically keeps only 1 unique instance per phone number and excludes all subsequent duplicates across files.
             </p>
           </div>
 

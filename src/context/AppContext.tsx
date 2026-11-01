@@ -50,6 +50,7 @@ interface AppContextType {
   removeFile: (fileId: string) => void;
   clearAllData: () => void;
   deleteNumbers: (ids: string[]) => void;
+  purgeDuplicates: () => void;
   loadSession: (session: ProcessingSession) => void;
   markNumbersAsCopied: (numbersToMark: ExtractedNumber[]) => Promise<void>;
   clearCopiedMemory: () => Promise<void>;
@@ -63,7 +64,7 @@ interface AppContextType {
 const DEFAULT_SETTINGS: AppSettings = {
   theme: 'dark',
   defaultExportFormat: 'txt',
-  autoDeduplicate: false,
+  autoDeduplicate: true,
   autoExcludeCopiedOnExport: true,
   hidePreviouslyCopied: false,
   numberFormat: 'e164',
@@ -381,6 +382,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast(`Removed ${ids.length} number(s)`, 'info');
   }, [showToast]);
 
+  const purgeDuplicates = useCallback(() => {
+    setNumbers((prev) => prev.filter((n) => !n.isDuplicate));
+    showToast('All duplicate instances removed. Exactly 1 unique copy kept per number.', 'success');
+  }, [showToast]);
+
   const loadSession = useCallback((session: ProcessingSession) => {
     setNumbers(session.numbers || []);
     setFiles(
@@ -426,6 +432,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         removeFile,
         clearAllData,
         deleteNumbers,
+        purgeDuplicates,
         loadSession,
         markNumbersAsCopied,
         clearCopiedMemory,

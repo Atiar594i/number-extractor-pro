@@ -24,14 +24,26 @@ export function formatPhoneNumberBySetting(
 }
 
 /**
- * Download pure TXT file with one phone number per line
+ * Download pure TXT file with one phone number per line.
+ * By default, deduplicates so each number appears exactly ONCE.
  */
 export function exportToTxt(
   numbers: ExtractedNumber[],
   filename: string,
-  format: AppSettings['numberFormat'] = 'e164'
+  format: AppSettings['numberFormat'] = 'e164',
+  deduplicate: boolean = true
 ): void {
-  const content = numbers
+  let target = numbers;
+  if (deduplicate) {
+    const seen = new Set<string>();
+    target = numbers.filter((item) => {
+      if (seen.has(item.normalized)) return false;
+      seen.add(item.normalized);
+      return true;
+    });
+  }
+
+  const content = target
     .map((item) => formatPhoneNumberBySetting(item, format))
     .join('\r\n');
 
@@ -211,15 +223,27 @@ export async function exportCountryWiseZip(
 }
 
 /**
- * Copy numbers to clipboard with one number per line
+ * Copy numbers to clipboard with one number per line.
+ * By default, deduplicates so each number appears exactly ONCE.
  */
 export async function copyNumbersToClipboard(
   numbers: ExtractedNumber[],
-  format: AppSettings['numberFormat'] = 'e164'
+  format: AppSettings['numberFormat'] = 'e164',
+  deduplicate: boolean = true
 ): Promise<boolean> {
   if (!numbers || numbers.length === 0) return false;
 
-  const text = numbers
+  let target = numbers;
+  if (deduplicate) {
+    const seen = new Set<string>();
+    target = numbers.filter((item) => {
+      if (seen.has(item.normalized)) return false;
+      seen.add(item.normalized);
+      return true;
+    });
+  }
+
+  const text = target
     .map((item) => formatPhoneNumberBySetting(item, format))
     .join('\n');
 

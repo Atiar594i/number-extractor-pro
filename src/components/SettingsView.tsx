@@ -227,10 +227,10 @@ export const SettingsView: React.FC = () => {
           <label className="flex items-center justify-between p-3 rounded-xl bg-slate-950/40 border border-slate-800 cursor-pointer">
             <div>
               <div className="font-semibold text-slate-200">
-                Automatic Duplicate Removal During Ingestion
+                Automatic Duplicate Removal (Keep 1 Copy Only — বাদবাকি ডুপ্লিকেট বাদ)
               </div>
               <div className="text-slate-400 text-[11px] mt-0.5">
-                Automatically discards duplicate occurrences across all uploaded sheets.
+                When a number appears repeatedly, shows and exports only 1 unique instance and automatically excludes all extra duplicates.
               </div>
             </div>
             <input

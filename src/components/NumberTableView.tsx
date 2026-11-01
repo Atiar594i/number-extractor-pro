@@ -17,6 +17,8 @@ import {
   Filter,
   EyeOff,
   Eye,
+  CopyX,
+  ShieldCheck,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import {
@@ -31,19 +33,22 @@ import type { ExtractedNumber } from '../types';
 export const NumberTableView: React.FC = () => {
   const {
     numbers,
+    uniqueNumbers,
+    duplicateNumbers,
     countrySummaries,
     settings,
     updateSettings,
     selectedCountryFilter,
     setSelectedCountryFilter,
     deleteNumbers,
+    purgeDuplicates,
     markNumbersAsCopied,
     showToast,
   } = useApp();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'VALID' | 'POSSIBLE' | 'INVALID'>('ALL');
-  const [duplicateFilter, setDuplicateFilter] = useState<'ALL' | 'UNIQUE' | 'DUPLICATES'>('ALL');
+  const [duplicateFilter, setDuplicateFilter] = useState<'UNIQUE' | 'ALL' | 'DUPLICATES'>('UNIQUE');
   const [leadFilter, setLeadFilter] = useState<'ALL' | 'FRESH_ONLY' | 'COPIED_ONLY'>('ALL');
   const [hideCopiedToggle, setHideCopiedToggle] = useState<boolean>(settings.hidePreviouslyCopied);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -332,79 +337,154 @@ export const NumberTableView: React.FC = () => {
         </div>
       </div>
 
-      {/* Quick Lead Filter Pills Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-2xl bg-slate-900/80 border border-slate-800 text-xs">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-slate-400 font-medium mr-1 flex items-center gap-1">
-            <Filter className="w-3.5 h-3.5 text-blue-400" />
-            Filter Leads:
-          </span>
+      {/* Quick Filter Pills Bar: Leads & Deduplication Controls */}
+      <div className="p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800 text-xs space-y-3">
+        {/* Row 1: Deduplication Mode (User's requirement: 1 copy only, drop rest!) */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-2.5 border-b border-slate-800/60">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-slate-400 font-semibold flex items-center gap-1.5 mr-1">
+              <ShieldCheck className="w-4 h-4 text-emerald-400" />
+              <span>Deduplication:</span>
+            </span>
 
-          <button
-            type="button"
-            onClick={() => {
-              setLeadFilter('ALL');
-              setCurrentPage(1);
-            }}
-            className={`px-3 py-1.5 rounded-xl font-semibold transition-all ${
-              leadFilter === 'ALL'
-                ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
-                : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
-            }`}
-          >
-            All Numbers ({numbers.length})
-          </button>
+            <button
+              type="button"
+              onClick={() => {
+                setDuplicateFilter('UNIQUE');
+                setCurrentPage(1);
+              }}
+              className={`px-3 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1.5 ${
+                duplicateFilter === 'UNIQUE'
+                  ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 ring-1 ring-blue-400'
+                  : 'bg-slate-950 text-slate-300 hover:text-white border border-slate-800'
+              }`}
+              title="Show only 1 copy per phone number. All duplicate occurrences are automatically dropped!"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-blue-300" />
+              <span>১টি করে দেখাও (Duplicates Excluded) ({uniqueNumbers.length})</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => {
-              setLeadFilter('FRESH_ONLY');
-              setCurrentPage(1);
-            }}
-            className={`px-3 py-1.5 rounded-xl font-semibold transition-all flex items-center gap-1.5 ${
-              leadFilter === 'FRESH_ONLY'
-                ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30 ring-1 ring-emerald-400'
-                : 'bg-slate-950 text-emerald-400 hover:text-emerald-300 border border-emerald-500/30'
-            }`}
-          >
-            <Sparkles className="w-3.5 h-3.5 text-emerald-300" />
-            <span>Fresh Leads ({freshCount})</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => {
+                setDuplicateFilter('ALL');
+                setCurrentPage(1);
+              }}
+              className={`px-3 py-1.5 rounded-xl font-medium transition-all flex items-center gap-1.5 ${
+                duplicateFilter === 'ALL'
+                  ? 'bg-slate-700 text-white ring-1 ring-slate-500'
+                  : 'bg-slate-950 text-slate-400 hover:text-slate-200 border border-slate-800'
+              }`}
+              title="Show all records including repeated duplicate rows"
+            >
+              <span>সবগুলো (Show All) ({numbers.length})</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => {
-              setLeadFilter('COPIED_ONLY');
-              setCurrentPage(1);
-            }}
-            className={`px-3 py-1.5 rounded-xl font-semibold transition-all flex items-center gap-1.5 ${
-              leadFilter === 'COPIED_ONLY'
-                ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30 ring-1 ring-purple-400'
-                : 'bg-slate-950 text-purple-300 hover:text-purple-200 border border-purple-500/30'
-            }`}
-          >
-            <BookmarkCheck className="w-3.5 h-3.5 text-purple-400" />
-            <span>Already Copied ({alreadyCopiedCount})</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => {
+                setDuplicateFilter('DUPLICATES');
+                setCurrentPage(1);
+              }}
+              className={`px-3 py-1.5 rounded-xl font-medium transition-all flex items-center gap-1.5 ${
+                duplicateFilter === 'DUPLICATES'
+                  ? 'bg-amber-600 text-white shadow-md shadow-amber-600/30'
+                  : 'bg-slate-950 text-amber-400 hover:text-amber-300 border border-amber-500/30'
+              }`}
+              title="View all duplicate instances that were dropped"
+            >
+              <CopyX className="w-3.5 h-3.5" />
+              <span>বাদ দেওয়া ডুপ্লিকেট ({duplicateNumbers.length})</span>
+            </button>
+          </div>
+
+          {duplicateNumbers.length > 0 && (
+            <button
+              type="button"
+              onClick={purgeDuplicates}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 text-[11px] font-semibold transition-all"
+              title="Permanently remove all duplicate rows from this session"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Purge {duplicateNumbers.length} Duplicates From Memory</span>
+            </button>
+          )}
         </div>
 
-        {/* Toggle to completely hide copied */}
-        <label className="flex items-center gap-2 cursor-pointer select-none text-[11px] text-slate-300 font-medium px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 hover:border-slate-700">
-          <input
-            type="checkbox"
-            checked={hideCopiedToggle}
-            onChange={(e) => {
-              setHideCopiedToggle(e.target.checked);
-              updateSettings({ hidePreviouslyCopied: e.target.checked });
-              setCurrentPage(1);
-            }}
-            className="w-3.5 h-3.5 rounded text-purple-600 bg-slate-800 border-slate-700"
-          />
-          <span className="flex items-center gap-1">
-            {hideCopiedToggle ? <EyeOff className="w-3.5 h-3.5 text-purple-400" /> : <Eye className="w-3.5 h-3.5 text-slate-400" />}
-            Hide Already Copied Numbers
-          </span>
-        </label>
+        {/* Row 2: Lead History (Fresh Leads vs Already Copied) */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-0.5">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-slate-400 font-medium mr-1 flex items-center gap-1">
+              <Filter className="w-3.5 h-3.5 text-blue-400" />
+              Filter Leads:
+            </span>
+
+            <button
+              type="button"
+              onClick={() => {
+                setLeadFilter('ALL');
+                setCurrentPage(1);
+              }}
+              className={`px-3 py-1.5 rounded-xl font-semibold transition-all ${
+                leadFilter === 'ALL'
+                  ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
+                  : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
+              }`}
+            >
+              All Leads
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setLeadFilter('FRESH_ONLY');
+                setCurrentPage(1);
+              }}
+              className={`px-3 py-1.5 rounded-xl font-semibold transition-all flex items-center gap-1.5 ${
+                leadFilter === 'FRESH_ONLY'
+                  ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30 ring-1 ring-emerald-400'
+                  : 'bg-slate-950 text-emerald-400 hover:text-emerald-300 border border-emerald-500/30'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5 text-emerald-300" />
+              <span>Fresh Leads ({freshCount})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setLeadFilter('COPIED_ONLY');
+                setCurrentPage(1);
+              }}
+              className={`px-3 py-1.5 rounded-xl font-semibold transition-all flex items-center gap-1.5 ${
+                leadFilter === 'COPIED_ONLY'
+                  ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30 ring-1 ring-purple-400'
+                  : 'bg-slate-950 text-purple-300 hover:text-purple-200 border border-purple-500/30'
+              }`}
+            >
+              <BookmarkCheck className="w-3.5 h-3.5 text-purple-400" />
+              <span>Already Copied ({alreadyCopiedCount})</span>
+            </button>
+          </div>
+
+          {/* Toggle to completely hide copied */}
+          <label className="flex items-center gap-2 cursor-pointer select-none text-[11px] text-slate-300 font-medium px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 hover:border-slate-700">
+            <input
+              type="checkbox"
+              checked={hideCopiedToggle}
+              onChange={(e) => {
+                setHideCopiedToggle(e.target.checked);
+                updateSettings({ hidePreviouslyCopied: e.target.checked });
+                setCurrentPage(1);
+              }}
+              className="w-3.5 h-3.5 rounded text-purple-600 bg-slate-800 border-slate-700"
+            />
+            <span className="flex items-center gap-1">
+              {hideCopiedToggle ? <EyeOff className="w-3.5 h-3.5 text-purple-400" /> : <Eye className="w-3.5 h-3.5 text-slate-400" />}
+              Hide Already Copied Numbers
+            </span>
+          </label>
+        </div>
       </div>
 
       {/* Filter and Search Bar */}
@@ -739,8 +819,16 @@ export const NumberTableView: React.FC = () => {
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
                           Duplicate ({item.duplicateCount})
                         </span>
+                      ) : item.duplicateCount > 0 ? (
+                        <span
+                          className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 font-semibold cursor-help"
+                          title={`This phone number appeared ${item.duplicateCount + 1} times across files. Showing only 1 copy; ${item.duplicateCount} duplicates were excluded.`}
+                        >
+                          <Sparkles className="w-3 h-3 text-amber-400" />
+                          Repeated {item.duplicateCount + 1}x (1 Kept)
+                        </span>
                       ) : (
-                        <span className="text-slate-500">Unique</span>
+                        <span className="text-slate-500">Unique (1x)</span>
                       )}
                     </td>
                     <td className="p-3.5 font-sans text-[11px] text-slate-400 truncate max-w-[150px]">

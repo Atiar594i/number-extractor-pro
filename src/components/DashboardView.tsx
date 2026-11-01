@@ -91,7 +91,10 @@ export const DashboardView: React.FC = () => {
     {
       title: 'Duplicate Numbers',
       value: stats.duplicateNumbers.toLocaleString(),
-      subtitle: `${stats.totalNumbers > 0 ? Math.round((stats.duplicateNumbers / stats.totalNumbers) * 100) : 0}% repetition rate`,
+      subtitle:
+        stats.duplicateNumbers > 0
+          ? `${stats.duplicateNumbers.toLocaleString()} extra duplicates auto-excluded`
+          : 'Zero duplicates detected',
       icon: <Copy className="w-5 h-5 text-amber-400" />,
       color: 'from-amber-500/15 via-amber-600/5 to-transparent border-amber-500/30 text-amber-400',
     },
