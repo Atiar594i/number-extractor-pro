@@ -12,12 +12,13 @@ import { ReviewView } from './components/ReviewView';
 import { HistoryView } from './components/HistoryView';
 import { SettingsView } from './components/SettingsView';
 import { Toast } from './components/Toast';
+import { MobileBottomNav } from './components/MobileBottomNav';
 
 const MainContent: React.FC = () => {
   const { activeTab } = useApp();
 
   return (
-    <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 overflow-y-auto">
+    <main className="flex-1 min-w-0 p-3.5 sm:p-6 lg:p-8 pb-24 lg:pb-8 overflow-y-auto">
       <div className="max-w-7xl mx-auto">
         {activeTab === 'dashboard' && <DashboardView />}
         {activeTab === 'extractor' && <ExtractorView />}
@@ -43,6 +44,7 @@ export const App: React.FC = () => {
           <MainContent />
         </div>
         <Toast />
+        <MobileBottomNav />
       </div>
     </AppProvider>
   );

@@ -330,7 +330,8 @@ async function parseTxtFile(
 }
 
 /**
- * Master parser: determines file format and processes with real-time feedback
+ * Master parser: determines file format and processes with real-time feedback.
+ * Specially optimized for mobile file uploads (handles MIME types & non-standard extensions).
  */
 export async function parseFile(
   file: File,
@@ -338,19 +339,46 @@ export async function parseFile(
   existingMap: Map<string, ExtractedNumber>,
   onProgress?: (p: ParseProgress) => void
 ): Promise<FileParseResult> {
-  const name = file.name.toLowerCase();
+  const name = (file.name || '').toLowerCase();
+  const type = (file.type || '').toLowerCase();
 
-  if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
+  // 1. Explicit Excel extension or MIME
+  if (
+    name.endsWith('.xlsx') ||
+    name.endsWith('.xls') ||
+    type.includes('spreadsheet') ||
+    type.includes('excel') ||
+    type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+    type === 'application/vnd.ms-excel'
+  ) {
     return parseExcelFile(file, settings, existingMap, onProgress);
   }
 
-  if (name.endsWith('.csv')) {
+  // 2. Explicit CSV extension or MIME
+  if (
+    name.endsWith('.csv') ||
+    name.endsWith('.tsv') ||
+    type === 'text/csv' ||
+    type === 'application/csv' ||
+    type === 'text/comma-separated-values'
+  ) {
     return parseCsvFile(file, settings, existingMap, onProgress);
   }
 
-  if (name.endsWith('.txt')) {
+  // 3. Plain text extension or MIME
+  if (name.endsWith('.txt') || type.startsWith('text/')) {
     return parseTxtFile(file, settings, existingMap, onProgress);
   }
 
-  return parseCsvFile(file, settings, existingMap, onProgress);
+  // 4. Mobile fallback for generic files (e.g. application/octet-stream from Android Downloads)
+  // Try Excel first via SheetJS binary reader, fallback to CSV/Text
+  try {
+    return await parseExcelFile(file, settings, existingMap, onProgress);
+  } catch {
+    try {
+      return await parseCsvFile(file, settings, existingMap, onProgress);
+    } catch {
+      return await parseTxtFile(file, settings, existingMap, onProgress);
+    }
+  }
 }

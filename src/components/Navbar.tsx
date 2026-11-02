@@ -30,22 +30,22 @@ export const Navbar: React.FC = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Brand Logo & Name */}
-          <div className="flex items-center gap-3 cursor-pointer" onClick={() => setActiveTab('dashboard')}>
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-cyan-400 p-0.5 shadow-lg shadow-blue-500/20 flex items-center justify-center">
+          <div className="flex items-center gap-2.5 cursor-pointer min-w-0" onClick={() => setActiveTab('dashboard')}>
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-cyan-400 p-0.5 shadow-lg shadow-blue-500/20 flex items-center justify-center shrink-0">
               <div className="w-full h-full bg-slate-900 rounded-[10px] flex items-center justify-center">
-                <FileSpreadsheet className="w-5 h-5 text-blue-400" />
+                <FileSpreadsheet className="w-4 h-4 sm:w-5 sm:h-5 text-blue-400" />
               </div>
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-lg text-slate-100 tracking-tight">
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5">
+                <span className="font-bold text-sm sm:text-base text-slate-100 tracking-tight truncate">
                   Number Extractor
                 </span>
-                <span className="px-2 py-0.5 text-[11px] font-bold tracking-wider uppercase rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                <span className="px-1.5 py-0.5 text-[10px] font-bold tracking-wider uppercase rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 shrink-0">
                   PRO
                 </span>
               </div>
-              <p className="text-[11px] text-slate-400 hidden sm:block">
+              <p className="text-[10px] text-slate-400 hidden sm:block">
                 Enterprise SMS & Phone Intelligence
               </p>
             </div>
